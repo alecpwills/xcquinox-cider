@@ -1,5 +1,15 @@
-# Disclaimer
-This is a forked version of the original repo, whose information is provided below. I have added a `pyproject.toml` so it is pip installable, and modified various functions within to work with the `xcquinox` package so it can use this version for its non-local descriptors.
+Metadata-Version: 2.1
+Name: mldftdat
+Version: 1.0.0+1792.gc6d8645.dirty
+Summary: Tools for training and evaluating CIDER functionals for use in Density Functional Theory calculations.
+Author: Bystrom, Kyle and Kozinsky, Boris
+License: MIT
+Project-URL: Source, https://github.com/alecpwills/xcquinox-cider
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
 
 # CiderPress
 
