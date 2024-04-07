@@ -27,7 +27,7 @@ class ElectronAnalyzer(ABC):
     calc_class = None
     calc_type = None
 
-    def __init__(self, calc, require_converged=True, max_mem=None, grid_level = 3):
+    def __init__(self, calc, require_converged=True, max_mem=None, grid_level = 3, grid=None):
         # max_mem in MB
         if not isinstance(calc, self.calc_class):
             raise ValueError('Calculation must be instance of {}.'.format(self.calc_class))
@@ -36,14 +36,17 @@ class ElectronAnalyzer(ABC):
         if require_converged and not calc.converged:
             raise ValueError('{} calculation must be converged.'.format(self.calc_type))
         self.calc = calc
-        self.mol = calc.mol.build()
+        # self.mol = calc.mol.build()
+        # self.calc.mol.build()
+        self.mol = calc.mol
         self.conv_tol = self.calc.conv_tol
         self.converged = calc.converged
         self.max_mem = max_mem
         self.grid_level = grid_level
-        print('PRIOR TO POST PROCESS', psutil.virtual_memory().available // 1e6)
+        self.grid = grid
+        # # print('PRIOR TO POST PROCESS', psutil.virtual_memory().available // 1e6)
         self.post_process()
-        print('FINISHED POST PROCESS', psutil.virtual_memory().available // 1e6)
+        # # print('FINISHED POST PROCESS', psutil.virtual_memory().available // 1e6)
 
     def as_dict(self):
         calc_props = {
@@ -111,10 +114,11 @@ class ElectronAnalyzer(ABC):
 
     def post_process(self):
         # The child post process function must set up the RDMs
-        self.grid = get_grid(self.mol)
-        if self.grid_level != 3:
-            self.grid.level = self.grid_level
-            self.grid.kernel()
+        self.grid = get_grid(self.mol) if not self.grid else self.grid
+        # print(f"post_process, self.grid shape: {self.grid.coords.shape}")
+        # if self.grid_level != 3:
+        #     self.grid.level = self.grid_level
+        #     self.grid.kernel()
 
         self.e_tot = self.calc.e_tot
         self.mo_coeff = self.calc.mo_coeff
@@ -124,16 +128,16 @@ class ElectronAnalyzer(ABC):
         self.mo_vals = get_mo_vals(self.ao_vals, self.mo_coeff)
 
         self.assign_num_chunks(self.ao_vals.shape, self.ao_vals.dtype)
-        print("NUMBER OF CHUNKS", self.calc_type, self.num_chunks, self.ao_vals.dtype, psutil.virtual_memory().available // 1e6)
+        # print("NUMBER OF CHUNKS", self.calc_type, self.num_chunks, self.ao_vals.dtype, psutil.virtual_memory().available // 1e6)
 
         if self.num_chunks > 1:
             self.ao_vele_mat = get_vele_mat_generator(self.mol, self.grid.coords,
                                                 self.num_chunks)
         else:
             self.ao_vele_mat = get_vele_mat(self.mol, self.grid.coords)
-            print('AO VELE MAT', self.ao_vele_mat.nbytes, self.ao_vele_mat.shape)
+            # print('AO VELE MAT', self.ao_vele_mat.nbytes, self.ao_vele_mat.shape)
 
-        print("MEM NOW", psutil.virtual_memory().available // 1e6)
+        # print("MEM NOW", psutil.virtual_memory().available // 1e6)
 
         self.rdm1 = None
         self.rdm2 = None
@@ -185,7 +189,7 @@ class RHFAnalyzer(ElectronAnalyzer):
                                                 self.num_chunks, self.mo_coeff)
         else:
             self.mo_vele_mat = get_mo_vele_mat(self.ao_vele_mat, self.mo_coeff)
-            print("MO VELE MAT", self.mo_vele_mat.nbytes, psutil.virtual_memory().available // 1e6)
+            # print("MO VELE MAT", self.mo_vele_mat.nbytes, psutil.virtual_memory().available // 1e6)
 
     def get_ha_energy_density(self):
         if self.ha_energy_density is None:
@@ -281,9 +285,10 @@ class UHFAnalyzer(ElectronAnalyzer):
 
 class RKSAnalyzer(RHFAnalyzer):
 
-    def __init__(self, calc, require_converged=True, max_mem=None):
-        if type(calc) != dft.rks.RKS:
-            raise ValueError('Calculation must be RKS.')
+    def __init__(self, calc, require_converged=True, max_mem=None, type_check=False):
+        if type_check:
+            if type(calc) != dft.rks.RKS:
+                raise ValueError('Calculation must be RKS.')
         self.dft = calc
         hf = scf.RHF(self.dft.mol)
         hf.e_tot = self.dft.e_tot
@@ -291,14 +296,16 @@ class RKSAnalyzer(RHFAnalyzer):
         hf.mo_occ = self.dft.mo_occ
         hf.mo_energy = self.dft.mo_energy
         hf.converged = self.dft.converged
-        super(RKSAnalyzer, self).__init__(hf, require_converged, max_mem)
+        self.grid = calc.grids
+        super(RKSAnalyzer, self).__init__(hf, require_converged, max_mem, grid = self.grid)
 
 
 class UKSAnalyzer(UHFAnalyzer):
 
-    def __init__(self, calc, require_converged=True, max_mem=None):
-        if type(calc) != dft.uks.UKS:
-            raise ValueError('Calculation must be UKS.')
+    def __init__(self, calc, require_converged=True, max_mem=None, type_check=False):
+        if type_check:
+            if type(calc) != dft.uks.UKS:
+                raise ValueError('Calculation must be UKS.')
         self.dft = calc
         hf = scf.UHF(self.dft.mol)
         hf.e_tot = self.dft.e_tot
@@ -306,4 +313,5 @@ class UKSAnalyzer(UHFAnalyzer):
         hf.mo_occ = self.dft.mo_occ
         hf.mo_energy = self.dft.mo_energy
         hf.converged = self.dft.converged
-        super(UKSAnalyzer, self).__init__(hf, require_converged, max_mem)
+        self.grid = calc.grids
+        super(UKSAnalyzer, self).__init__(hf, require_converged, max_mem, grid = self.grid)

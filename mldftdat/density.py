@@ -377,7 +377,8 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
     return contract_exchange_descriptors(desc)
 
 
-def get_exchange_descriptors2(analyzer, restricted=True, version='a',
+def get_exchange_descriptors2(analyzer, restricted=True, version='a', auxbasis=None, 
+                              rdm1=None, dm = None, inmol=False, mol=None, ingrid=False, grid=False,
                               **kwargs):
     """
     A length-21 descriptor containing semi-local information
@@ -396,44 +397,56 @@ def get_exchange_descriptors2(analyzer, restricted=True, version='a',
         g1 order: x, y, z
         g2 order: xy, yz, z^2, xz, x^2-y^2
     """
+    if not auxbasis:
+        auxbasis = 'weigend+etb'
     if version == 'a':
         _get_x_helper = _get_x_helper_a
     elif version == 'c':
         _get_x_helper = _get_x_helper_c
     else:
         raise ValueError('unknown descriptor version')
+    if not rdm1:
+        dm = analyzer.rdm1
+    if not inmol:
+        mol = analyzer.mol
+    if not ingrid:
+        grid = analyzer.grid
     #auxbasis = df.aug_etb(analyzer.mol, beta=1.6)
     nao = analyzer.mol.nao_nr()
-    auxmol = df.make_auxmol(analyzer.mol, auxbasis='weigend+etb')
+    # print(f"nao in get_exchange_descriptors2: {nao}")
+    # auxmol = df.make_auxmol(analyzer.mol, auxbasis=auxbasis)
+    auxmol = analyzer.mol
     naux = auxmol.nao_nr()
+    # print(f"naux in get_exchange_descriptors2: {naux}")
     # shape (naux, naux), symmetric
     aug_J = auxmol.intor('int2c2e')
     # shape (nao, nao, naux)
     aux_e2 = df.incore.aux_e2(analyzer.mol, auxmol)
-    #print(aux_e2.shape)
+    ## print(aux_e2.shape)
     # shape (naux, nao * nao)
     aux_e2 = aux_e2.reshape((-1, aux_e2.shape[-1])).T
     c_and_lower = cho_factor(aug_J)
     ao_to_aux = cho_solve(c_and_lower, aux_e2)
     ao_to_aux = ao_to_aux.reshape(naux, nao, nao)
+    # print(f"ao_to_aux shape: {ao_to_aux.shape}")
 
     # rho_dat aand rrdho are polarized if calc is unrestricted
-    ao_data, rho_data = get_mgga_data(analyzer.mol,
-                                      analyzer.grid,
-                                      analyzer.rdm1)
-    ddrho = get_rho_second_deriv(analyzer.mol,
-                                analyzer.grid,
-                                analyzer.rdm1,
+    ao_data, rho_data = get_mgga_data(mol,
+                                      grid,
+                                      dm)
+    ddrho = get_rho_second_deriv(mol,
+                                grid,
+                                dm,
                                 ao_data)
 
     if restricted:
         return _get_x_helper(auxmol, rho_data, ddrho, analyzer.grid,
-                             analyzer.rdm1, ao_to_aux, **kwargs)
+                             dm, ao_to_aux, **kwargs)
     else:
         desc0 = _get_x_helper(auxmol, 2*rho_data[0], 2*ddrho[0], analyzer.grid,
-                              2*analyzer.rdm1[0], ao_to_aux, **kwargs)
+                              2*dm[0], ao_to_aux, **kwargs)
         desc1 = _get_x_helper(auxmol, 2*rho_data[1], 2*ddrho[1], analyzer.grid,
-                              2*analyzer.rdm1[1], ao_to_aux, **kwargs)
+                              2*dm[1], ao_to_aux, **kwargs)
         return desc0, desc1
 
 # TODO: Check the math
@@ -467,7 +480,7 @@ def contract21(t2, t1):
     yterm = 1j * (res[0] + res[2]) / np.sqrt(2)
     zterm = res[1]
 
-    #print ( np.linalg.norm(np.imag(np.array([xterm, yterm, zterm]))) )
+    ## print ( np.linalg.norm(np.imag(np.array([xterm, yterm, zterm]))) )
     #assert np.linalg.norm(np.imag(np.array([xterm, yterm, zterm]))) < 1e-7
 
     return np.real(np.array([xterm, yterm, zterm]))

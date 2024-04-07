@@ -2,6 +2,7 @@ from pyscf import scf, dft, gto, ao2mo, df, lib, cc
 from pyscf.dft.numint import eval_ao, eval_rho
 from pyscf.dft.gen_grid import Grids
 from pyscf.pbc.tools.pyscf_ase import atoms_from_ase
+
 import numpy as np
 import logging
 
@@ -296,6 +297,8 @@ def get_vele_mat(mol, points):
     """
     auxmol = gto.fakemol_for_charges(points)
     vele_mat = df.incore.aux_e2(mol, auxmol)
+    # print(f"get_vele_mat, returned shape: {vele_mat.shape}")
+    # print(f"get_vele_mat, points shape: {points.shape}")
     return np.ascontiguousarray(np.transpose(vele_mat, axes=(2,0,1)))
 
 def get_mo_vals(ao_vals, mo_coeff):
