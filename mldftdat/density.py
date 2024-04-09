@@ -115,7 +115,12 @@ def get_gaussian_grid_c(coords, rho, l=0, s=None, alpha=None,
     bas[:,1] = l
     ascale = a * scale
     cond = ascale < amin
-    ascale[cond] = amin * np.exp(ascale[cond] / amin - 1)
+    try:
+        #numpy indexing works
+        ascale[cond] = amin * np.exp(ascale[cond] / amin - 1)
+    except:
+        #for use in jax, must index this way
+        ascale.at[cond].set(amin * np.exp(ascale[cond] / amin - 1))
     env[bas[:,5]] = ascale
     logging.debug('GAUSS GRID MIN EXPONENT {}'.format(np.sqrt(np.min(env[bas[:,5]]))))
     env[bas[:,6]] = a0**1.5 * np.sqrt(4 * np.pi**(1-l)) \
