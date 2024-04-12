@@ -224,8 +224,17 @@ def get_mgga_data(mol, grid, rdm1):
     Laplacian of density, and kinetic energy density
     in rho_data.
     """
+    #print('Evaluating MGGA Data; shapes: ')
+    #print(f'grid.coords = {grid.coords.shape}')
     ao_data = eval_ao(mol, grid.coords, deriv=3)
+    #print(f'generated ao_data = {ao_data.shape}')
+    #print(f'rdm1 input shape: {rdm1.shape}')
+    if ao_data.shape[-1] != rdm1.shape[0]:
+        #print('ao_data shape will be padded to match rdm1')
+        ao_data = np.pad(ao_data, [(0,0), (0,0), (0, rdm1.shape[0]-ao_data.shape[-1])])
+    #print(f'paddeds ao_data = {ao_data.shape}')
     if len(rdm1.shape) == 2:
+        #print('')
         rho_data = eval_rho(mol, ao_data, rdm1, xctype='mGGA')
     else:
         part0 = eval_rho(mol, ao_data, rdm1[0], xctype='mGGA')
@@ -259,8 +268,12 @@ def get_tau_and_grad(mol, grid, rdm1, ao_data):
 def get_rho_second_deriv_helper(mol, grid, dm, ao):
     from pyscf.dft.numint import _contract_rho, _dot_ao_dm
     from pyscf.dft.gen_grid import make_mask, BLKSIZE
-
+    #print('get_rho_second_deriv_helper input shapes')
+    #print(f'grid.weights = {grid.weights.shape}, dm = {dm.shape}, ao = {ao.shape}')
     nao = mol.nao_nr()
+    if nao < dm.shape[0]:
+        #print('nao generated from mol incorrect due to padding. changing')
+        nao = dm.shape[0]
     N = grid.weights.shape[0]
     non0tab = np.ones(((N+BLKSIZE-1)//BLKSIZE, mol.nbas),
                          dtype=np.uint8)
@@ -291,12 +304,21 @@ def get_rho_second_deriv(mol, grid, rdm1, ao_data):
         return np.array([get_rho_second_deriv_helper(mol, grid, rdm1[0], ao_data),\
                         get_rho_second_deriv_helper(mol, grid, rdm1[1], ao_data)])
 
-def get_vele_mat(mol, points):
+def get_vele_mat(mol, points, shape_mo_coeff=None):
     """
     Return shape (N, nao, nao)
     """
     auxmol = gto.fakemol_for_charges(points)
+    #shape (nao, nao, N) right now.
     vele_mat = df.incore.aux_e2(mol, auxmol)
+    if np.sum(shape_mo_coeff):
+        #print('Shape mo_coeff present, will pad vele_mat')
+        #print('Initial vele_mat shape: ', vele_mat.shape)
+        ishape = vele_mat.shape
+        rshape = shape_mo_coeff.shape
+        wshape = [(0, rshape[idx] - ishape[idx]) for idx in range(len(rshape))] + [(0,0)]
+        #print('Will try to pad to: ', wshape)
+        vele_mat = np.pad(vele_mat, wshape)
     # print(f"get_vele_mat, returned shape: {vele_mat.shape}")
     # print(f"get_vele_mat, points shape: {points.shape}")
     return np.ascontiguousarray(np.transpose(vele_mat, axes=(2,0,1)))

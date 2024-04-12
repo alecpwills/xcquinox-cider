@@ -123,8 +123,8 @@ class ElectronAnalyzer(ABC):
         self.e_tot = self.calc.e_tot
         self.mo_coeff = self.calc.mo_coeff
         self.mo_occ = self.calc.mo_occ
-        ###self.mo_energy = self.calc.mo_energy
-        self.ao_vals = get_ao_vals(self.mol, self.grid.coords)
+        self.mo_energy = self.calc.mo_energy
+        self.ao_vals = get_ao_vals(self.mol, self.grid.coords) if not self.iao else self.ao
         self.mo_vals = get_mo_vals(self.ao_vals, self.mo_coeff)
 
         self.assign_num_chunks(self.ao_vals.shape, self.ao_vals.dtype)
@@ -134,7 +134,9 @@ class ElectronAnalyzer(ABC):
             self.ao_vele_mat = get_vele_mat_generator(self.mol, self.grid.coords,
                                                 self.num_chunks)
         else:
-            self.ao_vele_mat = get_vele_mat(self.mol, self.grid.coords)
+            #print('Post process, generating ao_vele_mat')
+            self.ao_vele_mat = get_vele_mat(self.mol, self.grid.coords, self.mo_coeff)
+            #print('AO VELE MAT SHAPE: ', self.ao_vele_mat.shape)
             # print('AO VELE MAT', self.ao_vele_mat.nbytes, self.ao_vele_mat.shape)
 
         # print("MEM NOW", psutil.virtual_memory().available // 1e6)
@@ -179,7 +181,7 @@ class RHFAnalyzer(ElectronAnalyzer):
 
     def post_process(self):
         super(RHFAnalyzer, self).post_process()
-        self.rdm1 = np.array(self.calc.make_rdm1())
+        self.rdm1 = np.array(self.calc.make_rdm1()) if not self.idm else self.dm
         self.mo_energy = self.calc.mo_energy
         self.jmat, self.kmat = scf.hf.get_jk(self.mol, self.rdm1)
         self.ha_total, self.fx_total = get_hf_coul_ex_total2(self.rdm1,
@@ -234,7 +236,7 @@ class UHFAnalyzer(ElectronAnalyzer):
 
     def post_process(self):
         super(UHFAnalyzer, self).post_process()
-        self.rdm1 = np.array(self.calc.make_rdm1())
+        self.rdm1 = np.array(self.calc.make_rdm1()) if not self.idm else self.dm
         self.mo_energy = self.calc.mo_energy
         self.fx_energy_density_u = None
         self.fx_energy_density_d = None
@@ -285,7 +287,8 @@ class UHFAnalyzer(ElectronAnalyzer):
 
 class RKSAnalyzer(RHFAnalyzer):
 
-    def __init__(self, calc, require_converged=True, max_mem=None, type_check=False):
+    def __init__(self, calc, idm = None, dm=None, iao = None, ao = None,
+                 require_converged=True, max_mem=None, type_check=False, grid_subsample=100):
         if type_check:
             if type(calc) != dft.rks.RKS:
                 raise ValueError('Calculation must be RKS.')
@@ -297,12 +300,26 @@ class RKSAnalyzer(RHFAnalyzer):
         hf.mo_energy = self.dft.mo_energy
         hf.converged = self.dft.converged
         self.grid = calc.grids
+        self.grid_subsample = grid_subsample
+        try:
+            self.idm = calc.idm
+            self.dm = calc.dm
+        except:
+            self.idm = idm
+            self.dm = dm
+        try:
+            self.iao = calc.iao
+            self.ao = calc.ao
+        except:
+            self.iao = iao
+            self.ao = ao
         super(RKSAnalyzer, self).__init__(hf, require_converged, max_mem, grid = self.grid)
 
 
 class UKSAnalyzer(UHFAnalyzer):
 
-    def __init__(self, calc, require_converged=True, max_mem=None, type_check=False):
+    def __init__(self, calc, idm = None, dm=None,
+                 require_converged=True, max_mem=None, type_check=False, grid_subsample=100):
         if type_check:
             if type(calc) != dft.uks.UKS:
                 raise ValueError('Calculation must be UKS.')
@@ -314,4 +331,7 @@ class UKSAnalyzer(UHFAnalyzer):
         hf.mo_energy = self.dft.mo_energy
         hf.converged = self.dft.converged
         self.grid = calc.grids
+        self.grid_subsample = grid_subsample
+        self.idm = idm
+        self.dm = dm
         super(UKSAnalyzer, self).__init__(hf, require_converged, max_mem, grid = self.grid)
