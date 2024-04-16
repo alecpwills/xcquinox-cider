@@ -347,8 +347,8 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
     density = np.einsum('npq,pq->n', ao_to_aux, rdm1)
     desc = rho_data.copy()
     N = grid.weights.shape[0]
-    #print('_get_x_helper_c relevant shapes')
-    #print(f'density shape = {density.shape}')
+    print('_get_x_helper_c relevant shapes')
+    print(f'density shape = {density.shape}')
     for l in range(3):
         atm, bas, env = get_gaussian_grid_c(grid.coords, rho_data[0],
                                             l=l, s=lc[1], alpha=lc[2],
@@ -358,9 +358,9 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
         # (ngrid * (2l+1), naux)
         ovlp = gto.mole.intor_cross('int1e_ovlp', gridmol, auxmol)
         if ovlp.shape[-1] < rdm1.shape[0]:
-            #print('ovlp1 shape wrong due to padding. extending.')
+            print('ovlp1 shape wrong due to padding. extending.')
             ovlp = np.pad(ovlp, [(0,0), (0, rdm1.shape[0]-ovlp.shape[-1])])
-            #print('ovlp1 shape: ',ovlp.shape)
+            print('ovlp1 shape: ',ovlp.shape)
         proj = np.dot(ovlp, density).reshape(N, 2*l+1).transpose()
         desc = np.append(desc, proj, axis=0)
     
@@ -372,11 +372,11 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
     env[bas[:,6]] *= env[bas[:,5]]
     gridmol = gto.Mole(_atm=atm, _bas=bas, _env=env)
     ovlp = gto.mole.intor_cross('int1e_r2_origj', auxmol, gridmol).T
-    #print('ovlp2 shape: ', ovlp.shape)
+    print('ovlp2 shape: ', ovlp.shape)
     if ovlp.shape[-1] < rdm1.shape[0]:
-        #print('ovlp2 shape wrong due to padding. extending.')
+        print('ovlp2 shape wrong due to padding. extending.')
         ovlp = np.pad(ovlp, [(0,0), (0, rdm1.shape[0]-ovlp.shape[-1])])
-        #print('ovlp2 shape: ', ovlp.shape)
+        print('ovlp2 shape: ', ovlp.shape)
     proj = np.dot(ovlp, density).reshape(N, 2*l+1).transpose()
     desc = np.append(desc, proj, axis=0)
     
@@ -387,11 +387,11 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
     #env[bas[:,6]] *= env[bas[:,5]]**2
     gridmol = gto.Mole(_atm=atm, _bas=bas, _env=env)
     ovlp = gto.mole.intor_cross('int1e_ovlp', auxmol, gridmol).T
-    #print('ovlp3 shape: ', ovlp.shape)
+    print('ovlp3 shape: ', ovlp.shape)
     if ovlp.shape[-1] < rdm1.shape[0]:
-        #print('ovlp3 shape wrong due to padding. extending.')
+        print('ovlp3 shape wrong due to padding. extending.')
         ovlp = np.pad(ovlp, [(0,0), (0, rdm1.shape[0]-ovlp.shape[-1])])
-        #print('ovlp3 shape: ', ovlp.shape)
+        print('ovlp3 shape: ', ovlp.shape)
     proj = np.dot(ovlp, density).reshape(N, 2*l+1).transpose()
     desc = np.append(desc, proj, axis=0)
     
@@ -449,9 +449,9 @@ def get_exchange_descriptors2(analyzer, restricted=True, version='a', auxbasis=N
     c_and_lower = cho_factor(aug_J)
     ao_to_aux = cho_solve(c_and_lower, aux_e2)
     ao_to_aux = ao_to_aux.reshape(naux, nao, nao)
-    #print(f"ao_to_aux shape: {ao_to_aux.shape}")
+    print(f"ao_to_aux shape: {ao_to_aux.shape}")
     if nao < dm.shape[0]:
-        #print('ao_to_aux wrong shape due to padded inputs. padding')
+        print('ao_to_aux wrong shape due to padded inputs. padding')
         ao_to_aux = np.pad(ao_to_aux, [(0, dm.shape[0]-nao) for i in ao_to_aux.shape])
     # rho_dat aand rrdho are polarized if calc is unrestricted
     ao_data, rho_data = get_mgga_data(mol,
