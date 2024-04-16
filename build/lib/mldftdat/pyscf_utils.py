@@ -224,15 +224,18 @@ def get_mgga_data(mol, grid, rdm1):
     Laplacian of density, and kinetic energy density
     in rho_data.
     """
-    #print('Evaluating MGGA Data; shapes: ')
-    #print(f'grid.coords = {grid.coords.shape}')
+    print('Evaluating MGGA Data; shapes: ')
+    print(f'grid.coords = {grid.coords.shape}')
     ao_data = eval_ao(mol, grid.coords, deriv=3)
-    #print(f'generated ao_data = {ao_data.shape}')
-    #print(f'rdm1 input shape: {rdm1.shape}')
+    print(f'generated ao_data = {ao_data.shape}')
+    print(f'rdm1 input shape: {rdm1.shape}')
     if ao_data.shape[-1] != rdm1.shape[0]:
-        #print('ao_data shape will be padded to match rdm1')
-        ao_data = np.pad(ao_data, [(0,0), (0,0), (0, rdm1.shape[0]-ao_data.shape[-1])])
-    #print(f'paddeds ao_data = {ao_data.shape}')
+        print('ao_data shape will be padded to match rdm1')
+        try:
+            ao_data = np.pad(ao_data, [(0,0), (0,0), (0, rdm1.shape[0]-ao_data.shape[-1])])
+        except:
+            pass
+    print(f'paddeds ao_data = {ao_data.shape}')
     if len(rdm1.shape) == 2:
         #print('')
         rho_data = eval_rho(mol, ao_data, rdm1, xctype='mGGA')
@@ -311,16 +314,27 @@ def get_vele_mat(mol, points, shape_mo_coeff=None):
     auxmol = gto.fakemol_for_charges(points)
     #shape (nao, nao, N) right now.
     vele_mat = df.incore.aux_e2(mol, auxmol)
+    #if the shape_mo_coeff is present, and the shapes are compatibly arranged
     if np.sum(shape_mo_coeff):
-        #print('Shape mo_coeff present, will pad vele_mat')
-        #print('Initial vele_mat shape: ', vele_mat.shape)
+        print('Shape mo_coeff present, will pad vele_mat')
+        print('Initial vele_mat shape: ', vele_mat.shape)
+        print('shape_mo_coeff shape: ', shape_mo_coeff.shape)
         ishape = vele_mat.shape
+        isl = len(ishape)
         rshape = shape_mo_coeff.shape
-        wshape = [(0, rshape[idx] - ishape[idx]) for idx in range(len(rshape))] + [(0,0)]
-        #print('Will try to pad to: ', wshape)
-        vele_mat = np.pad(vele_mat, wshape)
-    # print(f"get_vele_mat, returned shape: {vele_mat.shape}")
-    # print(f"get_vele_mat, points shape: {points.shape}")
+        rsl = len(rshape)
+        #if rsl == 3, spin polarized mo_occ, so pad based on dims[1,2]
+        if rsl == 2:
+            wshape = [(0, rshape[idx] - ishape[idx]) for idx in range(len(rshape))] + [(0,0)]
+        elif rsl == 3:
+            wshape = [(0, rshape[idx] - ishape[idx-1]) for idx in range(len(rshape)) if idx > 0] + [(0,0)]
+        print('Will try to pad to: ', wshape)
+        try:
+            vele_mat = np.pad(vele_mat, wshape)
+        except:
+            pass
+    print(f"get_vele_mat, returned shape: {vele_mat.shape}")
+    print(f"get_vele_mat, points shape: {points.shape}")
     return np.ascontiguousarray(np.transpose(vele_mat, axes=(2,0,1)))
 
 def get_mo_vals(ao_vals, mo_coeff):
