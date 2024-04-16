@@ -237,7 +237,7 @@ def get_mgga_data(mol, grid, rdm1):
             pass
     print(f'paddeds ao_data = {ao_data.shape}')
     if len(rdm1.shape) == 2:
-        #print('')
+        print('')
         rho_data = eval_rho(mol, ao_data, rdm1, xctype='mGGA')
     else:
         part0 = eval_rho(mol, ao_data, rdm1[0], xctype='mGGA')
@@ -271,11 +271,11 @@ def get_tau_and_grad(mol, grid, rdm1, ao_data):
 def get_rho_second_deriv_helper(mol, grid, dm, ao):
     from pyscf.dft.numint import _contract_rho, _dot_ao_dm
     from pyscf.dft.gen_grid import make_mask, BLKSIZE
-    #print('get_rho_second_deriv_helper input shapes')
-    #print(f'grid.weights = {grid.weights.shape}, dm = {dm.shape}, ao = {ao.shape}')
+    print('get_rho_second_deriv_helper input shapes')
+    print(f'grid.weights = {grid.weights.shape}, dm = {dm.shape}, ao = {ao.shape}')
     nao = mol.nao_nr()
     if nao < dm.shape[0]:
-        #print('nao generated from mol incorrect due to padding. changing')
+        print('nao generated from mol incorrect due to padding. changing')
         nao = dm.shape[0]
     N = grid.weights.shape[0]
     non0tab = np.ones(((N+BLKSIZE-1)//BLKSIZE, mol.nbas),
@@ -335,7 +335,10 @@ def get_vele_mat(mol, points, shape_mo_coeff=None):
             pass
     print(f"get_vele_mat, returned shape: {vele_mat.shape}")
     print(f"get_vele_mat, points shape: {points.shape}")
-    return np.ascontiguousarray(np.transpose(vele_mat, axes=(2,0,1)))
+    print('converting to contiguous array')
+    retarr = np.ascontiguousarray(np.transpose(vele_mat, axes=(2,0,1)))
+    print('returning contiguous array')
+    return retarr
 
 def get_mo_vals(ao_vals, mo_coeff):
     """

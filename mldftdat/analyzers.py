@@ -181,7 +181,9 @@ class RHFAnalyzer(ElectronAnalyzer):
 
     def post_process(self):
         super(RHFAnalyzer, self).post_process()
+        print('Post process -- self.idm, self.dm.shape = ', self.idm, self.dm.shape)
         self.rdm1 = np.array(self.calc.make_rdm1()) if not self.idm else self.dm
+        print('Post process -- self.rdm1 shape, {}'.format(self.rdm1.shape))
         self.mo_energy = self.calc.mo_energy
         self.jmat, self.kmat = scf.hf.get_jk(self.mol, self.rdm1)
         self.ha_total, self.fx_total = get_hf_coul_ex_total2(self.rdm1,
