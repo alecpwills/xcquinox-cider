@@ -115,10 +115,10 @@ class ElectronAnalyzer(ABC):
     def post_process(self):
         # The child post process function must set up the RDMs
         self.grid = get_grid(self.mol) if not self.grid else self.grid
-        # print(f"post_process, self.grid shape: {self.grid.coords.shape}")
-        # if self.grid_level != 3:
-        #     self.grid.level = self.grid_level
-        #     self.grid.kernel()
+        print(f"post_process, self.grid shape: {self.grid.coords.shape}")
+        if self.grid_level != 3:
+            self.grid.level = self.grid_level
+            self.grid.kernel()
 
         self.e_tot = self.calc.e_tot
         self.mo_coeff = self.calc.mo_coeff
@@ -128,16 +128,16 @@ class ElectronAnalyzer(ABC):
         self.mo_vals = get_mo_vals(self.ao_vals, self.mo_coeff)
 
         self.assign_num_chunks(self.ao_vals.shape, self.ao_vals.dtype)
-        # print("NUMBER OF CHUNKS", self.calc_type, self.num_chunks, self.ao_vals.dtype, psutil.virtual_memory().available // 1e6)
+        print("NUMBER OF CHUNKS", self.calc_type, self.num_chunks, self.ao_vals.dtype, psutil.virtual_memory().available // 1e6)
 
         if self.num_chunks > 1:
             self.ao_vele_mat = get_vele_mat_generator(self.mol, self.grid.coords,
                                                 self.num_chunks)
         else:
-            #print('Post process, generating ao_vele_mat')
+            print('Post process, generating ao_vele_mat')
             self.ao_vele_mat = get_vele_mat(self.mol, self.grid.coords, self.mo_coeff)
-            #print('AO VELE MAT SHAPE: ', self.ao_vele_mat.shape)
-            # print('AO VELE MAT', self.ao_vele_mat.nbytes, self.ao_vele_mat.shape)
+            print('AO VELE MAT SHAPE: ', self.ao_vele_mat.shape)
+            print('AO VELE MAT', self.ao_vele_mat.nbytes, self.ao_vele_mat.shape)
 
         # print("MEM NOW", psutil.virtual_memory().available // 1e6)
 
@@ -191,7 +191,7 @@ class RHFAnalyzer(ElectronAnalyzer):
                                                 self.num_chunks, self.mo_coeff)
         else:
             self.mo_vele_mat = get_mo_vele_mat(self.ao_vele_mat, self.mo_coeff)
-            # print("MO VELE MAT", self.mo_vele_mat.nbytes, psutil.virtual_memory().available // 1e6)
+            print("MO VELE MAT", self.mo_vele_mat.nbytes, psutil.virtual_memory().available // 1e6)
 
     def get_ha_energy_density(self):
         if self.ha_energy_density is None:
