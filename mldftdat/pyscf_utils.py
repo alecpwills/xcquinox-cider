@@ -335,7 +335,10 @@ def get_vele_mat(mol, points, shape_mo_coeff=None):
             pass
     print(f"get_vele_mat, returned shape: {vele_mat.shape}")
     print(f"get_vele_mat, points shape: {points.shape}")
-    return np.ascontiguousarray(np.transpose(vele_mat, axes=(2,0,1)))
+    print('converting to contiguous array')
+    retarr = np.ascontiguousarray(np.transpose(vele_mat, axes=(2,0,1)))
+    print('returning contiguous array')
+    return retarr
 
 def get_mo_vals(ao_vals, mo_coeff):
     """
