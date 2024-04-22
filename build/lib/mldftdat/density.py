@@ -1,5 +1,6 @@
-import numpy as np
-from pyscf import gto, df
+# import numpy as np
+import jax.numpy as np
+from pyscfad import gto, df
 import scipy.linalg
 from scipy.linalg import cho_factor, cho_solve
 from mldftdat.pyscf_utils import *
@@ -61,9 +62,12 @@ def get_gaussian_grid(coords, rho, l=0, s=None, alpha=None):
     bas = auxmol._bas.copy()
     start = auxmol._env.shape[0] - 2
     env = np.zeros(start + 2 * N)
-    env[:start] = auxmol._env[:-2]
-    bas[:,5] = start + np.arange(N)
-    bas[:,6] = start + N + np.arange(N)
+    # env[:start] = auxmol._env[:-2]
+    env = env.at[:start].set(auxmol._env[:-2])
+    # bas[:,5] = start + np.arange(N)
+    bas = bas.at[:,5].set(start + np.arange(N))
+    # bas[:,6] = start + N + np.arange(N)
+    bas = bas.at[:,6].set(start + N + np.arange(N))
 
     a = np.pi * (rho / 2 + 1e-16)**(2.0 / 3)
     scale = 1
@@ -102,17 +106,21 @@ def get_gaussian_grid_c(coords, rho, l=0, s=None, alpha=None,
     auxmol = gto.fakemol_for_charges(coords)
     atm = auxmol._atm.copy()
     bas = auxmol._bas.copy()
+    bas = np.array(bas)
     start = auxmol._env.shape[0] - 2
     env = np.zeros(start + 2 * N)
-    env[:start] = auxmol._env[:-2]
-    bas[:,5] = start + np.arange(N)
-    bas[:,6] = start + N + np.arange(N)
+    env = env.at[:start].set(auxmol._env[:-2])
+    # bas[:,5] = start + np.arange(N)
+    bas = bas.at[:,5].set(start + np.arange(N))
+    # bas[:,6] = start + N + np.arange(N)
+    bas = bas.at[:,6].set(start + N + np.arange(N))
     ratio = alpha + 5./3 * s**2
 
     fac = fac_mul * 1.2 * (6 * np.pi**2)**(2.0/3) / np.pi
     a = np.pi * (rho / 2 + 1e-16)**(2.0 / 3)
     scale = a0 + (ratio-1) * fac
-    bas[:,1] = l
+    # bas[:,1] = l
+    bas = bas.at[:, 1].set(l)
     ascale = a * scale
     cond = ascale < amin
     try:
@@ -121,10 +129,13 @@ def get_gaussian_grid_c(coords, rho, l=0, s=None, alpha=None,
     except:
         #for use in jax, must index this way
         ascale.at[cond].set(amin * np.exp(ascale[cond] / amin - 1))
-    env[bas[:,5]] = ascale
+    # env[bas[:,5]] = ascale
+    env = env.at[bas[:, 5]].set(ascale)
     logging.debug('GAUSS GRID MIN EXPONENT {}'.format(np.sqrt(np.min(env[bas[:,5]]))))
-    env[bas[:,6]] = a0**1.5 * np.sqrt(4 * np.pi**(1-l)) \
-                    * (8 * np.pi / 3)**(l/3.0) * ascale**(l/2.0)
+    # env[bas[:,6]] = a0**1.5 * np.sqrt(4 * np.pi**(1-l)) \
+                    # * (8 * np.pi / 3)**(l/3.0) * ascale**(l/2.0)
+    env = env.at[bas[:,6]].set(a0**1.5 * np.sqrt(4 * np.pi**(1-l)) \
+                    * (8 * np.pi / 3)**(l/3.0) * ascale**(l/2.0))
 
     return atm, bas, env
 
@@ -329,7 +340,7 @@ def _get_x_helper_a(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
 
 
 def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
-                    a0=8.0, fac_mul=0.25, amin=GG_AMIN, **kwargs):
+                    a0=8.0, fac_mul=0.25, amin=GG_AMIN, coords=None, **kwargs):
     """
     FOR EVALUATION IN TRAIN LOOP
 
@@ -342,15 +353,19 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
     # desc[15] = g0-r^2
     # g1 order: x, y, z
     # g2 order: xy, yz, z^2, xz, x^2-y^2
+    if coords is not None:
+        COOR = coords
+    else:
+        COOR = grid.coords
     lc = get_dft_input2(rho_data)[:3]
     # size naux
     density = np.einsum('npq,pq->n', ao_to_aux, rdm1)
     desc = rho_data.copy()
-    N = grid.weights.shape[0]
-    print('_get_x_helper_c relevant shapes')
-    print(f'density shape = {density.shape}')
+    N = COOR.shape[0]
+    #print('_get_x_helper_c relevant shapes')
+    #print(f'density shape = {density.shape}')
     for l in range(3):
-        atm, bas, env = get_gaussian_grid_c(grid.coords, rho_data[0],
+        atm, bas, env = get_gaussian_grid_c(COOR, rho_data[0],
                                             l=l, s=lc[1], alpha=lc[2],
                                             a0=a0, fac_mul=fac_mul,
                                             amin=amin)
@@ -358,40 +373,41 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
         # (ngrid * (2l+1), naux)
         ovlp = gto.mole.intor_cross('int1e_ovlp', gridmol, auxmol)
         if ovlp.shape[-1] < rdm1.shape[0]:
-            print('ovlp1 shape wrong due to padding. extending.')
+            #print('ovlp1 shape wrong due to padding. extending.')
             ovlp = np.pad(ovlp, [(0,0), (0, rdm1.shape[0]-ovlp.shape[-1])])
-            print('ovlp1 shape: ',ovlp.shape)
+            #print('ovlp1 shape: ',ovlp.shape)
         proj = np.dot(ovlp, density).reshape(N, 2*l+1).transpose()
         desc = np.append(desc, proj, axis=0)
     
     l = 0
-    atm, bas, env = get_gaussian_grid_c(grid.coords, rho_data[0],
+    atm, bas, env = get_gaussian_grid_c(COOR, rho_data[0],
                                         l=0, s=lc[1], alpha=lc[2],
                                         a0=a0, fac_mul=fac_mul,
                                         amin=amin)
-    env[bas[:,6]] *= env[bas[:,5]]
+    # env[bas[:,6]] *= env[bas[:,5]]
+    env = env.at[bas[:,6]].set(env[bas[:,6]]*env[bas[:,5]])
     gridmol = gto.Mole(_atm=atm, _bas=bas, _env=env)
     ovlp = gto.mole.intor_cross('int1e_r2_origj', auxmol, gridmol).T
-    print('ovlp2 shape: ', ovlp.shape)
+    #print('ovlp2 shape: ', ovlp.shape)
     if ovlp.shape[-1] < rdm1.shape[0]:
-        print('ovlp2 shape wrong due to padding. extending.')
+        #print('ovlp2 shape wrong due to padding. extending.')
         ovlp = np.pad(ovlp, [(0,0), (0, rdm1.shape[0]-ovlp.shape[-1])])
-        print('ovlp2 shape: ', ovlp.shape)
+        #print('ovlp2 shape: ', ovlp.shape)
     proj = np.dot(ovlp, density).reshape(N, 2*l+1).transpose()
     desc = np.append(desc, proj, axis=0)
     
-    atm, bas, env = get_gaussian_grid_c(grid.coords, rho_data[0],
+    atm, bas, env = get_gaussian_grid_c(COOR, rho_data[0],
                                         l=0, s=lc[1], alpha=lc[2],
                                         a0=a0*2, fac_mul=fac_mul*2,
                                         amin=amin*2)
     #env[bas[:,6]] *= env[bas[:,5]]**2
     gridmol = gto.Mole(_atm=atm, _bas=bas, _env=env)
     ovlp = gto.mole.intor_cross('int1e_ovlp', auxmol, gridmol).T
-    print('ovlp3 shape: ', ovlp.shape)
+    #print('ovlp3 shape: ', ovlp.shape)
     if ovlp.shape[-1] < rdm1.shape[0]:
-        print('ovlp3 shape wrong due to padding. extending.')
+        #print('ovlp3 shape wrong due to padding. extending.')
         ovlp = np.pad(ovlp, [(0,0), (0, rdm1.shape[0]-ovlp.shape[-1])])
-        print('ovlp3 shape: ', ovlp.shape)
+        #print('ovlp3 shape: ', ovlp.shape)
     proj = np.dot(ovlp, density).reshape(N, 2*l+1).transpose()
     desc = np.append(desc, proj, axis=0)
     
@@ -400,6 +416,7 @@ def _get_x_helper_c(auxmol, rho_data, ddrho, grid, rdm1, ao_to_aux,
 
 def get_exchange_descriptors2(analyzer, restricted=True, version='a', auxbasis=None, 
                               rdm1=None, dm = None, inmol=False, mol=None, ingrid=False, grid=False,
+                              coords=None, weights=None,
                               **kwargs):
     """
     A length-21 descriptor containing semi-local information
@@ -434,42 +451,44 @@ def get_exchange_descriptors2(analyzer, restricted=True, version='a', auxbasis=N
         grid = analyzer.grid
     #auxbasis = df.aug_etb(analyzer.mol, beta=1.6)
     nao = analyzer.mol.nao_nr()
-    # print(f"nao in get_exchange_descriptors2: {nao}")
+    # #print(f"nao in get_exchange_descriptors2: {nao}")
     # auxmol = df.make_auxmol(analyzer.mol, auxbasis=auxbasis)
     auxmol = analyzer.mol
     naux = auxmol.nao_nr()
-    # print(f"naux in get_exchange_descriptors2: {naux}")
+    # #print(f"naux in get_exchange_descriptors2: {naux}")
     # shape (naux, naux), symmetric
     aug_J = auxmol.intor('int2c2e')
     # shape (nao, nao, naux)
     aux_e2 = df.incore.aux_e2(analyzer.mol, auxmol)
-    ## print(aux_e2.shape)
+    ## #print(aux_e2.shape)
     # shape (naux, nao * nao)
     aux_e2 = aux_e2.reshape((-1, aux_e2.shape[-1])).T
     c_and_lower = cho_factor(aug_J)
     ao_to_aux = cho_solve(c_and_lower, aux_e2)
     ao_to_aux = ao_to_aux.reshape(naux, nao, nao)
-    print(f"ao_to_aux shape: {ao_to_aux.shape}")
+    #print(f"ao_to_aux shape: {ao_to_aux.shape}")
     if nao < dm.shape[0]:
-        print('ao_to_aux wrong shape due to padded inputs. padding')
+        #print('ao_to_aux wrong shape due to padded inputs. padding')
         ao_to_aux = np.pad(ao_to_aux, [(0, dm.shape[0]-nao) for i in ao_to_aux.shape])
     # rho_dat aand rrdho are polarized if calc is unrestricted
     ao_data, rho_data = get_mgga_data(mol,
                                       grid,
-                                      dm)
+                                      dm,
+                                      coords=coords)
     ddrho = get_rho_second_deriv(mol,
                                 grid,
                                 dm,
-                                ao_data)
+                                ao_data,
+                                weights=weights)
 
     if restricted:
         return _get_x_helper(auxmol, rho_data, ddrho, analyzer.grid,
-                             dm, ao_to_aux, **kwargs)
+                             dm, ao_to_aux, coords=coords, **kwargs)
     else:
         desc0 = _get_x_helper(auxmol, 2*rho_data[0], 2*ddrho[0], analyzer.grid,
-                              2*dm[0], ao_to_aux, **kwargs)
+                              2*dm[0], ao_to_aux,coords=coords, **kwargs)
         desc1 = _get_x_helper(auxmol, 2*rho_data[1], 2*ddrho[1], analyzer.grid,
-                              2*dm[1], ao_to_aux, **kwargs)
+                              2*dm[1], ao_to_aux, coords=coords, **kwargs)
         return desc0, desc1
 
 # TODO: Check the math
@@ -477,33 +496,53 @@ def contract21(t2, t1):
     # xy, yz, z2, xz, x2-y2
     # x, y, z
     t2c = np.zeros(t2.shape, dtype=np.complex128)
-    t2c[4] = (t2[4] + 1j * t2[0]) / np.sqrt(2) # +2
-    t2c[3] = (-t2[3] - 1j * t2[1]) / np.sqrt(2) # +1
-    t2c[2] = t2[2] # 0
-    t2c[1] = (t2[3] - 1j * t2[1]) / np.sqrt(2) # -1
-    t2c[0] = (t2[4] - 1j * t2[0]) / np.sqrt(2) # -2
+    # t2c[4] = (t2[4] + 1j * t2[0]) / np.sqrt(2) # +2
+    # t2c[3] = (-t2[3] - 1j * t2[1]) / np.sqrt(2) # +1
+    # t2c[2] = t2[2] # 0
+    # t2c[1] = (t2[3] - 1j * t2[1]) / np.sqrt(2) # -1
+    # t2c[0] = (t2[4] - 1j * t2[0]) / np.sqrt(2) # -2
+
+    t2c = t2c.at[4].set((t2[4] + 1j * t2[0]) / np.sqrt(2))
+    t2c = t2c.at[3].set((-t2[3] - 1j * t2[1]) / np.sqrt(2))
+    t2c = t2c.at[2].set(t2[2])
+    t2c = t2c.at[1].set((t2[3] - 1j * t2[1]) / np.sqrt(2))
+    t2c = t2c.at[0].set((t2[4] - 1j * t2[0]) / np.sqrt(2))
 
     t1c = np.zeros(t1.shape, dtype=np.complex128)
-    t1c[2] = -(t1[0] + 1j * t1[1]) / np.sqrt(2) # +1
-    t1c[1] = t1[2] # 0
-    t1c[0] = (t1[0] - 1j * t1[1]) / np.sqrt(2) # -1
+    # t1c[2] = -(t1[0] + 1j * t1[1]) / np.sqrt(2) # +1
+    # t1c[1] = t1[2] # 0
+    # t1c[0] = (t1[0] - 1j * t1[1]) / np.sqrt(2) # -1
+
+    t1c = t1c.at[2].set(-(t1[0] + 1j * t1[1]) / np.sqrt(2))
+    t1c = t1c.at[1].set(t1[2])
+    t1c = t1c.at[0].set((t1[0] - 1j * t1[1]) / np.sqrt(2))
 
     res = np.zeros(t1.shape, dtype=np.complex128)
-    res[0] = np.sqrt(0.6) * t2c[0] * t1c[2]\
+    # res[0] = np.sqrt(0.6) * t2c[0] * t1c[2]\
+    #          - np.sqrt(0.3) * t2c[1] * t1c[1]\
+    #          + np.sqrt(0.1) * t2c[2] * t1c[0] # -1
+    # res[1] = np.sqrt(0.3) * t2c[1] * t1c[2]\
+    #          - np.sqrt(0.4) * t2c[2] * t1c[1]\
+    #          + np.sqrt(0.3) * t2c[3] * t1c[0]
+    # res[2] = np.sqrt(0.6) * t2c[4] * t1c[0]\
+    #          - np.sqrt(0.3) * t2c[3] * t1c[1]\
+    #          + np.sqrt(0.1) * t2c[2] * t1c[2]
+
+    res = res.at[0].set(np.sqrt(0.6) * t2c[0] * t1c[2]\
              - np.sqrt(0.3) * t2c[1] * t1c[1]\
-             + np.sqrt(0.1) * t2c[2] * t1c[0] # -1
-    res[1] = np.sqrt(0.3) * t2c[1] * t1c[2]\
+             + np.sqrt(0.1) * t2c[2] * t1c[0])
+    res = res.at[1].set(np.sqrt(0.3) * t2c[1] * t1c[2]\
              - np.sqrt(0.4) * t2c[2] * t1c[1]\
-             + np.sqrt(0.3) * t2c[3] * t1c[0]
-    res[2] = np.sqrt(0.6) * t2c[4] * t1c[0]\
+             + np.sqrt(0.3) * t2c[3] * t1c[0])
+    res = res.at[2].set(np.sqrt(0.6) * t2c[4] * t1c[0]\
              - np.sqrt(0.3) * t2c[3] * t1c[1]\
-             + np.sqrt(0.1) * t2c[2] * t1c[2]
+             + np.sqrt(0.1) * t2c[2] * t1c[2])
 
     xterm = (res[0] - res[2]) / np.sqrt(2)
     yterm = 1j * (res[0] + res[2]) / np.sqrt(2)
     zterm = res[1]
 
-    ## print ( np.linalg.norm(np.imag(np.array([xterm, yterm, zterm]))) )
+    ## #print ( np.linalg.norm(np.imag(np.array([xterm, yterm, zterm]))) )
     #assert np.linalg.norm(np.imag(np.array([xterm, yterm, zterm]))) < 1e-7
 
     return np.real(np.array([xterm, yterm, zterm]))
@@ -539,10 +578,12 @@ def contract_exchange_descriptors(desc):
     n43 = rho**(4.0/3)
     svec = desc[1:4] / (sprefac * n43 + 1e-16)
 
-    res[0] = rho
-    res[1] = s**2
-    res[2] = alpha
-
+    # res[0] = rho
+    # res[1] = s**2
+    # res[2] = alpha
+    res = res.at[0].set(rho)
+    res = res.at[1].set(s**2)
+    res = res.at[2].set(alpha)
     # other setup
     g0 = desc[6]
     g1 = desc[7:10]
@@ -558,21 +599,29 @@ def contract_exchange_descriptors(desc):
         g2_norm += g2[i] * g2[i]
     g2_norm /= np.sqrt(5)
 
-    res[3] = g0
-    res[4] = g1_norm
-    res[5] = dot1
-    res[6] = g2_norm
+    # res[3] = g0
+    # res[4] = g1_norm
+    # res[5] = dot1
+    # res[6] = g2_norm
+    res = res.at[3].set(g0)
+    res = res.at[4].set(g1_norm)
+    res = res.at[5].set(dot1)
+    res = res.at[6].set(g2_norm)
 
     sgc = contract21(g2, svec)
     sgg = contract21(g2, g1)
 
-    res[7] = np.einsum('pn,pn->n', sgc, svec)
-    res[8] = np.einsum('pn,pn->n', sgc, g1)
-    res[9] = np.einsum('pn,pn->n', sgg, g1)
+    # res[7] = np.einsum('pn,pn->n', sgc, svec)
+    # res[8] = np.einsum('pn,pn->n', sgc, g1)
+    # res[9] = np.einsum('pn,pn->n', sgg, g1)
+    res = res.at[7].set(np.einsum('pn,pn->n', sgc, svec))
+    res = res.at[8].set(np.einsum('pn,pn->n', sgc, g1))
+    res = res.at[9].set(np.einsum('pn,pn->n', sgg, g1))
 
-    res[10] = desc[15]
-    res[11] = desc[16]
-
+    # res[10] = desc[15]
+    # res[11] = desc[16]
+    res = res.at[10].set(desc[15])
+    res = res.at[11].set(desc[16])
     # res
     # 0:  rho
     # 1:  s
