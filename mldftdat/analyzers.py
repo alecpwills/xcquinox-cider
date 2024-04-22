@@ -47,10 +47,12 @@ class ElectronAnalyzer(ABC):
         self.grid_level = grid_level
         self.grid = grid
         if coor is not None:
-            print('ElectronAnalyzer; coor specified, shape = ', coor.shape)
+            #print('ElectronAnalyzer; coor specified, shape = ', coor.shape)
+            pass
         self.coor = coor
         if weight is not None:
-            print('RKSAnalyzer; weight specified, shape = ', weight.shape)
+            #print('RKSAnalyzer; weight specified, shape = ', weight.shape)
+            pass
         self.weight = weight
         #print('PRIOR TO POST PROCESS', psutil.virtual_memory().available // 1e6)
         self.post_process()
@@ -330,10 +332,12 @@ class RKSAnalyzer(RHFAnalyzer):
             self.iao = iao
             self.ao = ao
         if coor is not None:
-            print('RKSAnalyzer; coor specified, shape = ', coor.shape)
+            # print('RKSAnalyzer; coor specified, shape = ', coor.shape)
+            pass
         self.coor = coor
         if weight is not None:
-            print('RKSAnalyzer; weight specified, shape = ', weight.shape)
+            # print('RKSAnalyzer; weight specified, shape = ', weight.shape)
+            pass
         self.weight = weight
         super(RKSAnalyzer, self).__init__(hf, require_converged, max_mem, grid = self.grid,
                                           coor=coor, weight=weight)

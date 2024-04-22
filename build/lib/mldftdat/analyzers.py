@@ -3,7 +3,8 @@ from pyscf.dft.numint import eval_ao, eval_rho, eval_rho2
 from pyscf.dft.gen_grid import Grids
 from pyscf.pbc.tools.pyscf_ase import atoms_from_ase
 from mldftdat.pyscf_utils import *
-import numpy as np
+# import numpy as np
+import jax.numpy as np
 from abc import ABC, abstractmethod, abstractproperty
 from io import BytesIO
 import psutil
@@ -27,7 +28,8 @@ class ElectronAnalyzer(ABC):
     calc_class = None
     calc_type = None
 
-    def __init__(self, calc, require_converged=True, max_mem=None, grid_level = 3, grid=None):
+    def __init__(self, calc, require_converged=True, max_mem=None, grid_level = 3, grid=None,
+                 coor=None, weight=None):
         # max_mem in MB
         if not isinstance(calc, self.calc_class):
             raise ValueError('Calculation must be instance of {}.'.format(self.calc_class))
@@ -44,9 +46,17 @@ class ElectronAnalyzer(ABC):
         self.max_mem = max_mem
         self.grid_level = grid_level
         self.grid = grid
-        # # print('PRIOR TO POST PROCESS', psutil.virtual_memory().available // 1e6)
+        if coor is not None:
+            #print('ElectronAnalyzer; coor specified, shape = ', coor.shape)
+            pass
+        self.coor = coor
+        if weight is not None:
+            #print('RKSAnalyzer; weight specified, shape = ', weight.shape)
+            pass
+        self.weight = weight
+        #print('PRIOR TO POST PROCESS', psutil.virtual_memory().available // 1e6)
         self.post_process()
-        # # print('FINISHED POST PROCESS', psutil.virtual_memory().available // 1e6)
+        #print('FINISHED POST PROCESS', psutil.virtual_memory().available // 1e6)
 
     def as_dict(self):
         calc_props = {
@@ -115,31 +125,36 @@ class ElectronAnalyzer(ABC):
     def post_process(self):
         # The child post process function must set up the RDMs
         self.grid = get_grid(self.mol) if not self.grid else self.grid
-        print(f"post_process, self.grid shape: {self.grid.coords.shape}")
+        #print(f"post_process, self.grid shape: {self.grid.coords.shape}")
         if self.grid_level != 3:
             self.grid.level = self.grid_level
             self.grid.kernel()
-
+        if self.coor is not None:
+            COOR = self.coor
+        else:
+            COOR = self.grid.coords
+        #print(f'Post process: COOR.shape={COOR.shape}')
+            
         self.e_tot = self.calc.e_tot
         self.mo_coeff = self.calc.mo_coeff
         self.mo_occ = self.calc.mo_occ
         self.mo_energy = self.calc.mo_energy
-        self.ao_vals = get_ao_vals(self.mol, self.grid.coords) if not self.iao else self.ao
+        self.ao_vals = get_ao_vals(self.mol, COOR) if not self.iao else self.ao
         self.mo_vals = get_mo_vals(self.ao_vals, self.mo_coeff)
 
         self.assign_num_chunks(self.ao_vals.shape, self.ao_vals.dtype)
-        print("NUMBER OF CHUNKS", self.calc_type, self.num_chunks, self.ao_vals.dtype, psutil.virtual_memory().available // 1e6)
+        #print("NUMBER OF CHUNKS", self.calc_type, self.num_chunks, self.ao_vals.dtype, psutil.virtual_memory().available // 1e6)
 
         if self.num_chunks > 1:
-            self.ao_vele_mat = get_vele_mat_generator(self.mol, self.grid.coords,
+            self.ao_vele_mat = get_vele_mat_generator(self.mol, COOR,
                                                 self.num_chunks)
         else:
-            print('Post process, generating ao_vele_mat')
-            self.ao_vele_mat = get_vele_mat(self.mol, self.grid.coords, self.mo_coeff)
-            print('AO VELE MAT SHAPE: ', self.ao_vele_mat.shape)
-            print('AO VELE MAT', self.ao_vele_mat.nbytes, self.ao_vele_mat.shape)
+            #print('Post process, generating ao_vele_mat')
+            self.ao_vele_mat = get_vele_mat(self.mol, COOR, self.mo_coeff)
+            #print('AO VELE MAT SHAPE: ', self.ao_vele_mat.shape)
+            #print('AO VELE MAT', self.ao_vele_mat.nbytes, self.ao_vele_mat.shape)
 
-        # print("MEM NOW", psutil.virtual_memory().available // 1e6)
+        #print("MEM NOW", psutil.virtual_memory().available // 1e6)
 
         self.rdm1 = None
         self.rdm2 = None
@@ -181,9 +196,9 @@ class RHFAnalyzer(ElectronAnalyzer):
 
     def post_process(self):
         super(RHFAnalyzer, self).post_process()
-        print('Post process -- self.idm, self.dm.shape = ', self.idm, self.dm.shape)
+        #print('Post process -- self.idm, self.dm.shape = ', self.idm, self.dm.shape)
         self.rdm1 = np.array(self.calc.make_rdm1()) if not self.idm else self.dm
-        print('Post process -- self.rdm1 shape, {}'.format(self.rdm1.shape))
+        #print('Post process -- self.rdm1 shape, {}'.format(self.rdm1.shape))
         self.mo_energy = self.calc.mo_energy
         self.jmat, self.kmat = scf.hf.get_jk(self.mol, self.rdm1)
         self.ha_total, self.fx_total = get_hf_coul_ex_total2(self.rdm1,
@@ -193,7 +208,7 @@ class RHFAnalyzer(ElectronAnalyzer):
                                                 self.num_chunks, self.mo_coeff)
         else:
             self.mo_vele_mat = get_mo_vele_mat(self.ao_vele_mat, self.mo_coeff)
-            print("MO VELE MAT", self.mo_vele_mat.nbytes, psutil.virtual_memory().available // 1e6)
+            #print("MO VELE MAT", self.mo_vele_mat.nbytes, psutil.virtual_memory().available // 1e6)
 
     def get_ha_energy_density(self):
         if self.ha_energy_density is None:
@@ -290,7 +305,8 @@ class UHFAnalyzer(ElectronAnalyzer):
 class RKSAnalyzer(RHFAnalyzer):
 
     def __init__(self, calc, idm = None, dm=None, iao = None, ao = None,
-                 require_converged=True, max_mem=None, type_check=False, grid_subsample=100):
+                 require_converged=True, max_mem=None, type_check=False, grid_subsample=100,
+                 coor=None, weight=None):
         if type_check:
             if type(calc) != dft.rks.RKS:
                 raise ValueError('Calculation must be RKS.')
@@ -315,7 +331,16 @@ class RKSAnalyzer(RHFAnalyzer):
         except:
             self.iao = iao
             self.ao = ao
-        super(RKSAnalyzer, self).__init__(hf, require_converged, max_mem, grid = self.grid)
+        if coor is not None:
+            # print('RKSAnalyzer; coor specified, shape = ', coor.shape)
+            pass
+        self.coor = coor
+        if weight is not None:
+            # print('RKSAnalyzer; weight specified, shape = ', weight.shape)
+            pass
+        self.weight = weight
+        super(RKSAnalyzer, self).__init__(hf, require_converged, max_mem, grid = self.grid,
+                                          coor=coor, weight=weight)
 
 
 class UKSAnalyzer(UHFAnalyzer):

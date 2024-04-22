@@ -32,7 +32,8 @@ from mldftdat.density import get_x_helper_full_a, get_x_helper_full_c, LDA_FACTO
 from scipy.linalg import cho_factor, cho_solve
 from mldftdat.dft.utils import *
 
-import numpy as np
+# import numpy as np
+import jax.numpy as np
 import logging
 import time
 

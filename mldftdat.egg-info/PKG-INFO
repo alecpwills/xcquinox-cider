@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: mldftdat
-Version: 1.0.0+1799.gafaf6f7.dirty
+Version: 1.0.0+1801.gd757616.dirty
 Summary: Tools for training and evaluating CIDER functionals for use in Density Functional Theory calculations.
 Author: Bystrom, Kyle and Kozinsky, Boris
 License: MIT
