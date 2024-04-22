@@ -1,4 +1,5 @@
-import numpy as np 
+# import numpy as np
+import jax.numpy as np
 from mldftdat.workflow_utils import get_save_dir, SAVE_ROOT
 from mldftdat.density import get_exchange_descriptors2, LDA_FACTOR,\
                              get_ldax, get_ldax_dens
@@ -74,7 +75,7 @@ def rho_data_from_calc(calc, grid, is_ccsd=False):
         else:
             trans_mo_coeff = calc.mo_coeff.T
         dm = transform_basis_1e(dm, trans_mo_coeff)
-    print ('NORMALIZATION', np.trace(dm.dot(calc.mol.get_ovlp())))
+    #print ('NORMALIZATION', np.trace(dm.dot(calc.mol.get_ovlp())))
     rho = eval_rho(calc.mol, ao, dm, xctype='MGGA')
     return rho
 
@@ -84,7 +85,7 @@ def get_zr_diatomic(mol, coords):
     direction = diff / np.linalg.norm(diff)
     zs = np.dot(coords, direction)
     zvecs = np.outer(zs, direction)
-    print(zvecs.shape)
+    #print(zvecs.shape)
     rs = np.linalg.norm(coords - zvecs, axis=1)
     return zs, rs
 
@@ -233,7 +234,7 @@ def predict_exchange(analyzer, model=None, restricted=True, return_desc=False):
         for p0, p1 in lib.prange(0, gridsize, blksize):
             #neps[p0:p1], std[p0:p1] = model.predict(xdesc.T[p0:p1], return_std=True)
             neps[p0:p1] = model.predict(xdesc.T[p0:p1], return_std=False)
-        #print('integrated uncertainty', np.dot(np.abs(std), np.abs(weights)))
+        ##print('integrated uncertainty', np.dot(np.abs(std), np.abs(weights)))
         eps = neps / rho
         if return_desc:
             X = model.get_descriptors(xdesc.transpose())
@@ -386,7 +387,7 @@ def read_accdb_structure(struct_id):
     ACCDB_DIR = os.environ.get('ACCDB')
     fname = '{}.xyz'.format(os.path.join(ACCDB_DIR, 'Geometries', struct_id))
     with open(fname, 'r') as f:
-        print(fname)
+        #print(fname)
         lines = f.readlines()
         natom = int(lines[0])
         charge_and_spin = lines[1].split()
@@ -427,7 +428,7 @@ def get_accdb_data(formula, FUNCTIONAL, BASIS, per_bond=False):
         if per_bond:
             en, nb = get_run_energy_and_nbond(dname)
             pred_energy += count * en
-            print('NB', nb)
+            #print('NB', nb)
             nbond += count * nb
             #if nbond is None:
             #    nbond = nb
@@ -502,10 +503,10 @@ def get_accdb_performance(dataset_eval_name, FUNCTIONAL, BASIS, data_names,
                                             per_bond=True)
             energy = pred_ref
             result[data_point_name]['true'] = pred_ref
-        print(pred_energy-energy, pred_energy, energy)
+        #print(pred_energy-energy, pred_energy, energy)
         errs.append(pred_energy-energy)
     errs = np.array(errs)
-    print(errs.shape)
+    #print(errs.shape)
     me = np.mean(errs)
     mae = np.mean(np.abs(errs))
     rmse = np.sqrt(np.mean(errs**2))
